@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AutoTool — Tự động đăng bài đa nền tảng</title>
+    <link rel="stylesheet" href="/styles.css?v=2" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📣</text></svg>" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">AT</span>
+          <div>
+            <strong>AutoTool</strong>
+            <small>Đăng bài đa nền tảng</small>
+          </div>
+        </div>
+
+        <nav id="nav">
+          <a href="#/dashboard" data-view="dashboard"><span>📊</span> Tổng quan</a>
+          <a href="#/accounts" data-view="accounts"><span>👤</span> Tài khoản</a>
+          <a href="#/targets" data-view="targets"><span>👥</span> Nhóm &amp; Trang</a>
+          <a href="#/posts" data-view="posts"><span>📝</span> Bài viết</a>
+          <a href="#/jobs" data-view="jobs"><span>🚀</span> Chiến dịch</a>
+          <a href="#/calendar" data-view="calendar"><span>📅</span> Lịch đăng bài</a>
+          <a href="#/reports" data-view="reports"><span>📈</span> Báo cáo</a>
+          <a href="#/logs" data-view="logs"><span>🧾</span> Nhật ký</a>
+          <a href="#/help" data-view="help"><span>❓</span> Hướng dẫn</a>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="worker-pill" id="workerPill">
+            <span class="dot"></span>
+            <span id="workerText">Đang kết nối…</span>
+          </div>
+          <div class="muted tiny" id="healthText"></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <h1 id="viewTitle">Tổng quan</h1>
+          <div class="topbar-actions" id="viewActions"></div>
+        </header>
+        <section class="view" id="view"></section>
+      </main>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+    <div class="modal-root" id="modalRoot" hidden></div>
+
+    <script type="module" src="/js/app.js?v=2"></script>
+  </body>
+</html>

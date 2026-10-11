@@ -1,0 +1,25 @@
+{
+  "name": "autotool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-platform publishing automation: schedule, queue, retry and report posts to pages, groups, channels across social platforms using browser sessions.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/index.js",
+    "start:py": ".venv\\Scripts\\python.exe main.py",
+    "dev": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch src/index.js",
+    "cli": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/cli.js",
+    "test": "node scripts/smoke-test.mjs",
+    "test:browser": "node scripts/browser-check.mjs",
+    "test:flow": "node scripts/flow-e2e.mjs",
+    "test:ui": "node scripts/dashboard-check.mjs",
+    "doctor": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/cli.js doctor"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "playwright": "^1.49.1"
+  }
+}

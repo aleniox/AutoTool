@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+data/
+# DSH checkout nam trong workspace nay, khong thuoc project
+deepseek-harness/
+.dsh/
+.env
+*.log
+.DS_Store
+Thumbs.db
+.venv/
