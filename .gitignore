@@ -1,5 +1,6 @@
 node_modules/
 .npm-cache/
+__pycache__/
 data/
 # DSH checkout nam trong workspace nay, khong thuoc project
 deepseek-harness/
