@@ -1,12 +1,74 @@
+# ==========================================
+# Du lieu nguoi dung, tai khoan & moi truong
+# ==========================================
+data/
+.env
+.env.local
+.env.*.local
+*.env
+*.sqlite
+*.sqlite3
+*.db
+
+# ==========================================
+# Moi truong ao Python & Thu vien dong goi
+# ==========================================
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Byte-code Python da bien dich
+__pycache__/
+**/**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# ==========================================
+# Node.js & Web Cache
+# ==========================================
 node_modules/
 .npm-cache/
-__pycache__/
-data/
-# DSH checkout nam trong workspace nay, khong thuoc project
-deepseek-harness/
-.dsh/
-.env
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# Nhat ky (Logs) & Bao cao loi
+# ==========================================
 *.log
+logs/
+
+# ==========================================
+# Playwright / Trinh duyet & Anh chup loi
+# ==========================================
+.playwright/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ==========================================
+# IDE & He dieu hanh (Windows / macOS)
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
-.venv/
+ehthumbs.db
+desktop.ini
+
+# ==========================================
+# Workspace noi bo / Phu tro
+# ==========================================
+deepseek-harness/
+.dsh/

@@ -1,10 +1,10 @@
-# AutoTool — Tự động đăng bài đa nền tảng
+# PostPilot — Tự động hóa đăng bài & Quản lý chiến dịch thông minh
 
-Tool tự động đăng bài lên **nhiều nền tảng**, **nhiều nhóm/trang** từ một danh sách bài viết + ảnh.
-Có Web dashboard, lên lịch, hàng đợi, retry và báo cáo.
+Hệ thống tự động đăng bài lên **nhiều nền tảng**, **nhiều nhóm/trang** từ một danh sách bài viết + ảnh.
+Tích hợp Web Dashboard, Trợ lý AI đa mô hình (Gemini, ChatGPT, DeepSeek, Claude, Local LLM), cá nhân hóa phong cách viết, lên lịch thông minh, hàng đợi an toàn và báo cáo trực quan.
 
-> **Điểm quan trọng nhất về an toàn:** tool **KHÔNG lưu mật khẩu**. Nó dùng trình duyệt thật
-> (Edge/Chrome) và bạn đăng nhập thủ công một lần; phiên đăng nhập được lưu trong profile riêng
+> **Điểm quan trọng nhất về an toàn:** công cụ **KHÔNG lưu mật khẩu**. Hệ thống sử dụng trình duyệt thật
+> (Edge/Chrome) và bạn chỉ cần đăng nhập thủ công một lần; phiên đăng nhập được lưu trong profile riêng
 > của từng tài khoản.
 
 ---
@@ -30,23 +30,31 @@ Có Web dashboard, lên lịch, hàng đợi, retry và báo cáo.
 
 | Nhóm | Chi tiết |
 |---|---|
-| **Đa nền tảng** | Facebook (Page + Group), LinkedIn (profile/group/company), X, Telegram, Reddit, Instagram, Threads, TikTok, Zalo |
+| **Đa nền tảng** | Facebook (Page + Group - Đã kiểm chứng), LinkedIn, X, Telegram, Reddit, Instagram, Threads, TikTok, Zalo |
 | **Đa tài khoản** | Mỗi tài khoản một browser profile riêng, giới hạn và nhịp đăng riêng |
 | **Danh sách nhóm** | Import hàng loạt từ URL, tự nhận diện loại + ID |
 | **Danh sách bài** | Import nhiều bài một lần, mỗi bài có ảnh/video/link/hashtag riêng |
 | **Thư viện media** | Upload một lần, dùng cho nhiều bài |
-| **Lên lịch + hàng đợi** | Hẹn giờ bắt đầu, worker tự xử lý tuần tự theo từng tài khoản |
+| **Lên lịch + Hàng đợi** | Hẹn giờ bắt đầu, hỗ trợ **lặp lại định kỳ (Hàng ngày, Hàng tuần, Hàng tháng)** |
+| **Lịch đăng bài (Calendar)** | Giao diện lịch tháng 7 cột trực quan, theo dõi bài đã đăng và dự kiến đăng |
+| **Trợ lý AI đa mô hình** | Hỗ trợ Google Gemini, ChatGPT, Claude, DeepSeek & Local LLM; tạo bài, viết lại, sinh biến thể và ghi nhớ phong cách thương hiệu riêng |
 | **Retry thông minh** | Backoff lũy tiến, nhận biết rate-limit để nghỉ dài, dừng khi hết phiên đăng nhập |
-| **Báo cáo** | Theo ngày / nền tảng / tài khoản / chiến dịch, top lỗi, ảnh chụp màn hình lúc lỗi |
+| **Báo cáo & Nhật ký** | Theo ngày / nền tảng / tài khoản / chiến dịch, top lỗi, ảnh chụp màn hình lúc lỗi |
 | **Chế độ thử (dry-run)** | Điền nội dung + đính ảnh như thật nhưng **không bấm nút Đăng** |
 
 ---
 
-## Cài đặt
+## Cài đặt & Khởi động
 
-**Yêu cầu:** Node.js ≥ 22.5 (dùng `node:sqlite` có sẵn, không cần module native),
-và Chrome hoặc Edge đã cài (để không phải tải Chromium ~130MB).
+**Yêu cầu:** Chrome hoặc Microsoft Edge đã cài sẵn trên máy (để dùng trực tiếp profile, không cần tải thêm Chromium).
 
+### Cách 1: Khởi động nhanh với Python / FastAPI (Khuyên dùng trên Windows)
+Chỉ cần nhấp đúp vào file **`start.bat`** ở thư mục gốc, hoặc chạy lệnh:
+```bash
+.venv\Scripts\python.exe main.py
+```
+
+### Cách 2: Khởi động với Node.js (≥ 22.5)
 ```bash
 cd F:\AutoTool
 npm install
@@ -55,9 +63,7 @@ npm run doctor      # kiểm tra môi trường
 npm start
 ```
 
-Mở **http://127.0.0.1:8787**
-
-> Trên Windows, nếu PowerShell chặn `npm` do Execution Policy, dùng `npm.cmd` thay vì `npm`.
+Sau khi khởi động, mở trình duyệt truy cập: **http://127.0.0.1:8787**
 
 ---
 
@@ -195,7 +201,7 @@ Thêm nữa:
 
 | Nền tảng | Trạng thái | Hỗ trợ |
 |---|---|---|
-| **Facebook** | Chưa kiểm chứng | Page, Group, Profile |
+| **Facebook** | ✅ Đã kiểm chứng | Page, Group, Profile (text, link, hashtag, đính kèm nhiều ảnh/media) |
 | **LinkedIn** | Chưa kiểm chứng | Profile, Group, Company |
 | **X (Twitter)** | Chưa kiểm chứng | Profile (280 ký tự) |
 | **Telegram** | Chưa kiểm chứng | Group, Channel, Chat |
@@ -205,9 +211,9 @@ Thêm nữa:
 | **TikTok** | ⚠️ Thử nghiệm | Profile (bắt buộc có video) |
 | **Zalo** | ⚠️ Thử nghiệm | Nhóm, Chat |
 
-**"Chưa kiểm chứng"** nghĩa là flow đã viết theo giao diện hiện tại nhưng chưa được chạy thật
-thành công trên tài khoản thật. Giao diện các nền tảng thay đổi liên tục — hãy chạy **chế độ thử**
-với một nhóm trước, rồi cập nhật selector nếu cần.
+- **"✅ Đã kiểm chứng":** Đã chạy thử nghiệm thực tế thành công trên tài khoản thật (Facebook đã kiểm chứng đăng vào Nhóm cá nhân/Fanpage kèm đầy đủ nhiều ảnh/media).
+- **"Chưa kiểm chứng":** Flow đã được viết hoàn chỉnh theo giao diện hiện tại nhưng chưa được kiểm thử trên nhiều tài khoản thật khác nhau.
+- **"⚠️ Thử nghiệm":** Nền tảng có cơ chế kiểm duyệt chặt qua web hoặc giao diện thay đổi thường xuyên, nên chạy ở chế độ thử (dry-run) trước.
 
 ---
 
@@ -280,6 +286,10 @@ GET    /api/jobs/:id · DELETE
 GET    /api/jobs/:id/items              Các lượt đăng (lọc ?status=)
 POST   /api/jobs/preview                Dự đoán số lượt đăng
 POST   /api/jobs/:id/pause | resume | cancel | run-now | retry-failed
+
+GET    /api/calendar?month=YYYY-MM      Lịch đăng bài theo tháng + chu kỳ định kỳ
+GET    /api/ai/settings · POST          Cấu hình API Key & Model Gemini
+POST   /api/ai/generate                 Sáng tạo nội dung bài viết bằng AI
 
 GET    /api/reports/summary?days=30     Báo cáo tổng hợp
 GET    /api/projects · POST · DELETE    Dự án

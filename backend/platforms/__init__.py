@@ -22,6 +22,9 @@ _PLATFORMS_LIST = [
     zalo_platform,
 ]
 
+# Nền tảng hiển thị trên giao diện (tạm thời chỉ bật Facebook)
+ACTIVE_PLATFORMS = {'facebook'}
+
 platforms = {p['id']: p for p in _PLATFORMS_LIST}
 
 def get_platform(platform_id: str) -> dict:
@@ -34,8 +37,10 @@ def get_platform(platform_id: str) -> dict:
 def has_platform(platform_id: str) -> bool:
     return str(platform_id or '').lower() in platforms
 
-def all_platforms() -> List[dict]:
-    return list(platforms.values())
+def all_platforms(active_only: bool = False) -> List[dict]:
+    if active_only:
+        return [p for p in _PLATFORMS_LIST if p['id'] in ACTIVE_PLATFORMS]
+    return list(_PLATFORMS_LIST)
 
 KIND_LABELS = {
     'group': 'Nhóm',
@@ -73,15 +78,15 @@ def platform_view(p: dict) -> dict:
         'flows': list(p.get('flows', {}).keys()),
     }
 
-def list_platforms() -> List[dict]:
-    return [platform_view(p) for p in all_platforms()]
+def list_platforms(active_only: bool = True) -> List[dict]:
+    return [platform_view(p) for p in all_platforms(active_only=active_only)]
 
 def parse_target_url(raw_url: str, platform_hint: Optional[str] = None) -> Optional[dict]:
     url = str(raw_url or '').strip()
     if not url:
         return None
 
-    candidates = [get_platform(platform_hint)] if platform_hint and has_platform(platform_hint) else all_platforms()
+    candidates = [get_platform(platform_hint)] if platform_hint and has_platform(platform_hint) else all_platforms(active_only=True)
 
     for p in candidates:
         for tk in p.get('targetKinds', []):
@@ -99,8 +104,8 @@ def parse_target_url(raw_url: str, platform_hint: Optional[str] = None) -> Optio
                         'url': url,
                     }
 
-    # Telegram: @username hoac t.me/...
-    if not platform_hint or platform_hint == 'telegram':
+    # Telegram: @username hoac t.me/... (chi kiem tra neu duoc chi dinh hoac telegram dang active)
+    if platform_hint == 'telegram' or ('telegram' in ACTIVE_PLATFORMS and not platform_hint):
         m = re.match(r'^(?:https?:\/\/(?:t\.me|telegram\.me)\/)?@?([A-Za-z0-9_]{4,32})$', url)
         if m:
             return {

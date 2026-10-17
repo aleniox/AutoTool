@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     browsers = detect_browsers()
     url = f"http://{config.host}:{config.port}"
     log.info('─' * 64)
-    log.info(f"  AutoTool (Python/FastAPI) dang chay tai {url}")
+    log.info(f"  PostPilot (Python/FastAPI) dang chay tai {url}")
     log.info(f"  Thu muc du lieu : {config.data_dir}")
     log.info(f"  Browser engine  : {config.browser.channel}{'' if browsers else ' (KHONG TIM THAY!)'}")
     log.info(f"  Che do          : {'an (headless)' if config.browser.headless else 'hien cua so'}")
@@ -47,12 +47,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    log.info("Dang tat AutoTool...")
+    log.info("Dang tat PostPilot...")
     await stop_worker(drain=True, timeout_ms=20000)
     await close_all()
     log.info("Da tat sach se.")
 
-app = FastAPI(title="AutoTool", lifespan=lifespan)
+app = FastAPI(title="PostPilot", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

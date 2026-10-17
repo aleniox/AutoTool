@@ -282,172 +282,72 @@ async def import_posts(req: Request):
     return {'posts': created, 'total': len(blocks)}
 
 # --------------------------------------------------------------------------- #
-# AI (Gemini) Assistant                                                       #
+# --------------------------------------------------------------------------- #
+# Multi-Provider AI Assistant (Gemini, ChatGPT, DeepSeek, Claude, Custom)    #
 # --------------------------------------------------------------------------- #
 
-def mask_key(key: str) -> str:
-    if not key:
-        return ''
-    s = str(key).strip()
-    if len(s) <= 8:
-        return '********'
-    return f"{s[:6]}...{s[-4:]}"
+from backend.core.ai_service import get_all_ai_settings, save_ai_settings, generate_content, mask_key
 
 @router.get('/ai/settings')
 async def get_ai_settings():
-    key = str(get_setting('gemini_api_key', '') or os.environ.get('GEMINI_API_KEY', '')).strip()
-    model = str(get_setting('gemini_model', '') or 'gemini-2.5-flash').strip()
-    return {
-        'hasKey': bool(key),
-        'maskedKey': mask_key(key),
-        'model': model,
-    }
+    return get_all_ai_settings()
 
 @router.post('/ai/settings')
-async def save_ai_settings(req: Request):
+async def save_ai_settings_endpoint(req: Request):
     body = await req.json()
-    api_key = str(body.get('apiKey') or '').strip()
-    model = str(body.get('model') or '').strip() or 'gemini-2.5-flash'
-    if api_key:
-        set_setting('gemini_api_key', api_key)
-    set_setting('gemini_model', model)
-    key = str(get_setting('gemini_api_key', '') or os.environ.get('GEMINI_API_KEY', '')).strip()
-    return {
-        'ok': True,
-        'hasKey': bool(key),
-        'maskedKey': mask_key(key),
-        'model': model,
-    }
-
-def _call_gemini_sync(url: str, payload: dict) -> dict:
-    req_data = json.dumps(payload).encode('utf-8')
-    req = urllib.request.Request(
-        url,
-        data=req_data,
-        headers={'Content-Type': 'application/json'},
-        method='POST'
+    provider = body.get('provider')
+    api_key = body.get('apiKey')
+    model = body.get('model')
+    endpoint = body.get('endpoint')
+    persona_prompt = body.get('personaPrompt')
+    set_active = bool(body.get('setActive', True))
+    return save_ai_settings(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        endpoint=endpoint,
+        set_active=set_active,
+        persona_prompt=persona_prompt,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode('utf-8'))
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode('utf-8', errors='ignore')
-        try:
-            err_json = json.loads(err_body)
-            msg = err_json.get('error', {}).get('message') or f"HTTP {e.code}"
-        except Exception:
-            msg = f"HTTP {e.code}: {err_body[:200]}"
-        raise HTTPException(status_code=400, detail=f"Gemini API loi: {msg}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Khong the ket noi Gemini API: {str(e)}")
 
 @router.post('/ai/generate')
 async def generate_ai_post(req: Request):
     body = await req.json()
+    provider = body.get('provider')
     passed_key = str(body.get('apiKey') or '').strip()
-    api_key = passed_key or str(get_setting('gemini_api_key', '') or os.environ.get('GEMINI_API_KEY', '')).strip()
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Chưa cấu hình Gemini API Key. Vui lòng nhập API Key trên giao diện.")
+    model = body.get('model')
+    endpoint = body.get('endpoint')
+    persona_prompt = body.get('personaPrompt')
+    save_key = bool(body.get('saveKey'))
+    save_persona = bool(body.get('savePersona'))
 
-    if body.get('saveKey') and passed_key:
-        set_setting('gemini_api_key', passed_key)
+    if (save_key and (passed_key or model or endpoint)) or (save_persona and persona_prompt is not None):
+        save_ai_settings(
+            provider=provider,
+            api_key=passed_key if passed_key else None,
+            model=model if model else None,
+            endpoint=endpoint if endpoint else None,
+            persona_prompt=persona_prompt if save_persona else None,
+            set_active=bool(provider),
+        )
 
-    model = str(body.get('model') or '').strip() or str(get_setting('gemini_model', '') or 'gemini-2.5-flash').strip()
-    mode = str(body.get('mode') or 'generate').strip()
-    topic = str(body.get('topic') or '').strip()
-    existing_content = str(body.get('existingContent') or '').strip()
-    platform = str(body.get('platform') or 'đa nền tảng').strip()
-    tone = str(body.get('tone') or 'bán hàng thu hút').strip()
-    instructions = str(body.get('instructions') or '').strip()
     try:
         count = min(5, max(1, int(body.get('count') or 1)))
     except Exception:
         count = 1
 
-    if mode == 'rewrite':
-        if not existing_content:
-            raise HTTPException(status_code=400, detail="Vui lòng nhập nội dung cần viết lại")
-        prompt_text = f"""Bạn là chuyên gia biên tập và tối ưu nội dung mạng xã hội.
-Hãy viết lại bài viết sau đây theo phong cách: "{tone}".
-Nền tảng hướng tới: {platform}.
-Yêu cầu thêm: {instructions or 'Viết lại hấp dẫn hơn, thêm emoji phù hợp, ngắt dòng rõ ràng, bổ sung hashtag liên quan'}.
-
-NỘI DUNG GỐC:
-\"\"\"
-{existing_content}
-\"\"\"
-
-Yêu cầu định dạng đầu ra:
-Bạn PHẢI trả về JSON hợp lệ theo đúng cấu trúc sau (không thêm bất kỳ văn bản markdown hay giải thích nào ngoài JSON):
-{{
-  "title": "Tiêu đề ngắn gọn, bắt mắt (nếu phù hợp)",
-  "caption": "Nội dung bài viết hoàn chỉnh đã được viết lại, ngắt dòng đẹp mắt và có emoji...",
-  "hashtags": "#hashtag1 #hashtag2 #hashtag3",
-  "variations": []
-}}"""
-    else:
-        if not topic and not instructions:
-            raise HTTPException(status_code=400, detail="Vui lòng nhập chủ đề hoặc ý tưởng bài viết")
-        prompt_text = f"""Bạn là chuyên gia sáng tạo nội dung mạng xã hội hàng đầu.
-Hãy viết bài đăng cho nền tảng: "{platform}".
-Chủ đề / Ý tưởng: "{topic}".
-Giọng điệu / Phong cách: "{tone}".
-Yêu cầu thêm: {instructions or 'Nội dung hấp dẫn, bắt trend, có lời kêu gọi hành động (CTA), chèn emoji sinh động'}.
-Số lượng bài viết cần tạo: {count}.
-
-Yêu cầu định dạng đầu ra:
-Bạn PHẢI trả về JSON hợp lệ theo đúng cấu trúc sau (không thêm bất kỳ văn bản markdown hay giải thích nào ngoài JSON):
-{{
-  "title": "Tiêu đề bài viết ngắn gọn, giật tít, hấp dẫn",
-  "caption": "Nội dung bài viết hoàn chỉnh, ngắt dòng đẹp mắt, có icon/emoji và lời kêu gọi hành động (CTA)...",
-  "hashtags": "#hashtag1 #hashtag2 #hashtag3",
-  "variations": [
-    {'''
-    {
-      "title": "Tiêu đề biến thể...",
-      "caption": "Nội dung biến thể...",
-      "hashtags": "#hashtag1 #hashtag2"
-    }''' if count > 1 else ''}
-  ]
-}}"""
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(model)}:generateContent?key={urllib.parse.quote(api_key)}"
-    payload = {
-        'contents': [{'parts': [{'text': prompt_text}]}],
-        'generationConfig': {
-            'temperature': 0.7,
-            'responseMimeType': 'application/json',
-        }
-    }
-
-    data = await asyncio.to_thread(_call_gemini_sync, url, payload)
-
-    try:
-        raw_text = data['candidates'][0]['content']['parts'][0]['text']
-    except (KeyError, IndexError):
-        raise HTTPException(status_code=400, detail="Không nhận được nội dung từ Gemini")
-
-    try:
-        parsed_result = json.loads(raw_text)
-    except Exception:
-        cleaned = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_text.strip(), flags=re.M).strip()
-        try:
-            parsed_result = json.loads(cleaned)
-        except Exception:
-            parsed_result = {
-                'title': '',
-                'caption': raw_text,
-                'hashtags': '',
-                'variations': [],
-            }
-
-    return {
-        'ok': True,
-        'result': {
-            'title': parsed_result.get('title') or '',
-            'caption': parsed_result.get('caption') or '',
-            'hashtags': parsed_result.get('hashtags') or '',
-            'variations': parsed_result.get('variations') if isinstance(parsed_result.get('variations'), list) else [],
-        }
-    }
+    return await generate_content(
+        provider_id=provider,
+        api_key=passed_key,
+        model=model,
+        endpoint=endpoint,
+        mode=str(body.get('mode') or 'generate'),
+        topic=str(body.get('topic') or ''),
+        existing_content=str(body.get('existingContent') or ''),
+        platform=str(body.get('platform') or 'Facebook'),
+        tone=str(body.get('tone') or 'bán hàng thu hút'),
+        instructions=str(body.get('instructions') or ''),
+        count=count,
+        persona_prompt=persona_prompt,
+    )
 

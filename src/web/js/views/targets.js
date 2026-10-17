@@ -337,11 +337,9 @@ Nhóm Mua Bán | https://www.facebook.com/groups/123456789</pre>
           <span>Ép loại (tuỳ chọn)</span>
           <select id="i-kind">
             <option value="auto">Tự nhận diện từ URL</option>
-            <option value="group">Nhóm</option>
-            <option value="page">Trang</option>
-            <option value="channel">Kênh</option>
-            <option value="subreddit">Subreddit</option>
-            <option value="profile">Trang cá nhân</option>
+            <option value="group">Nhóm (Group)</option>
+            <option value="page">Trang (Page)</option>
+            <option value="profile">Trang cá nhân (Profile)</option>
           </select>
         </label>
       </div>

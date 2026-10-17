@@ -1,0 +1,22 @@
+docker run -d ^
+  --name zero_documents ^
+  --restart unless-stopped ^
+  --ipc=host ^
+  -p 8080:8080 ^
+  -v "F:\models:/models" ^
+  --gpus all ^
+  ghcr.io/ggml-org/llama.cpp:server-cuda12 ^
+  -m /models/gemma-4-E4B-it-Q4_K_M.gguf ^
+  --ctx-size 13107 ^
+  --parallel 1 ^
+  --threads 4 ^
+  --threads-batch 4 ^
+  --batch-size 4096 ^
+  --ubatch-size 1024 ^
+  --gpu-layers all ^
+  --jinja ^
+  --host 0.0.0.0 ^
+  --port 8080 ^
+  --reasoning off ^
+  --flash-attn on ^
+  --sleep-idle-seconds 900

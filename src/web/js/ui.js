@@ -23,12 +23,21 @@ export function toast(message, kind = 'info', ms = 4200) {
 
 /* -------------------------------- Modal --------------------------------- */
 
-let modalCleanup = null;
+const modalStack = [];
 
 export function openModal({ title, body, footer = '', wide = false, onMount }) {
   const root = $('#modalRoot');
   root.hidden = false;
-  root.innerHTML = `
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  const zIdx = 100 + modalStack.length * 10;
+  backdrop.style.zIndex = String(zIdx);
+  if (modalStack.length > 0) {
+    backdrop.style.background = 'rgba(0,0,0,0.75)';
+  }
+
+  backdrop.innerHTML = `
     <div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
       <header>
         <h3>${esc(title)}</h3>
@@ -38,26 +47,58 @@ export function openModal({ title, body, footer = '', wide = false, onMount }) {
       ${footer ? `<footer>${footer}</footer>` : ''}
     </div>`;
 
-  const close = () => closeModal();
-  root.querySelectorAll('[data-modal-close]').forEach((b) => b.addEventListener('click', close));
-  root.onclick = (e) => {
-    if (e.target === root) close();
+  const modalEl = backdrop.querySelector('.modal');
+  let cleanup = null;
+
+  const closeThis = () => closeModal(modalEl);
+
+  backdrop.querySelectorAll('[data-modal-close]').forEach((b) => b.addEventListener('click', closeThis));
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeThis();
+  });
+
+  const entry = {
+    backdrop,
+    modalEl,
+    get cleanup() { return cleanup; },
+    set cleanup(fn) { cleanup = fn; },
   };
+  modalStack.push(entry);
+  root.appendChild(backdrop);
+
   document.onkeydown = (e) => {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') closeModal();
   };
-  if (onMount) modalCleanup = onMount(root.querySelector('.modal')) ?? null;
-  return root.querySelector('.modal');
+
+  if (onMount) {
+    cleanup = onMount(modalEl) ?? null;
+  }
+  return modalEl;
 }
 
-export function closeModal() {
+export function closeModal(targetModal = null) {
   const root = $('#modalRoot');
-  if (typeof modalCleanup === 'function') modalCleanup();
-  modalCleanup = null;
-  root.hidden = true;
-  root.innerHTML = '';
-  root.onclick = null;
-  document.onkeydown = null;
+  if (!modalStack.length) return;
+
+  let idx = modalStack.length - 1;
+  if (targetModal) {
+    const found = modalStack.findIndex((m) => m.modalEl === targetModal || m.backdrop === targetModal);
+    if (found !== -1) idx = found;
+  }
+
+  const [item] = modalStack.splice(idx, 1);
+  if (item) {
+    if (typeof item.cleanup === 'function') {
+      try { item.cleanup(); } catch (err) { console.error(err); }
+    }
+    item.backdrop.remove();
+  }
+
+  if (modalStack.length === 0) {
+    root.hidden = true;
+    root.innerHTML = '';
+    document.onkeydown = null;
+  }
 }
 
 export function confirmDialog(message, { title = 'Xác nhận', danger = false, okLabel = 'Đồng ý' } = {}) {
@@ -69,7 +110,7 @@ export function confirmDialog(message, { title = 'Xác nhận', danger = false, 
                <button class="${danger ? 'danger' : 'primary'}" data-ok>${esc(okLabel)}</button>`,
     });
     modal.querySelector('[data-ok]').addEventListener('click', () => {
-      closeModal();
+      closeModal(modal);
       resolve(true);
     });
     modal.querySelectorAll('[data-modal-close]').forEach((b) =>

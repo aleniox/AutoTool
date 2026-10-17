@@ -37,8 +37,8 @@ async def get_health():
     }
 
 @router.get('/platforms')
-async def get_platforms():
-    return {'platforms': list_platforms()}
+async def get_platforms(all: bool = False):
+    return {'platforms': list_platforms(active_only=not all)}
 
 @router.post('/platforms/resolve')
 async def resolve_platforms(req: Request):

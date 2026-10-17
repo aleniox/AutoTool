@@ -11,7 +11,7 @@ export async function render(root) {
   projects = await api.projects.list().then((r) => r.projects).catch(() => []);
 
   $('#viewActions').innerHTML = `
-    <button class="secondary" id="openAiAssistant">✨ Trợ lý AI (Gemini)</button>
+    <button class="secondary" id="openAiAssistant">✨ Trợ lý AI</button>
     <button id="importPosts">📥 Import nhiều bài</button>
     <button class="primary" id="addPost">+ Tạo bài viết</button>`;
 
@@ -189,7 +189,7 @@ async function postModal(post, onDone) {
           <span>Nội dung <b>*</b></span>
           <div style="display:flex; gap:6px">
             <button type="button" class="sm secondary" id="btnAiRewrite" title="Dùng AI viết lại hoặc trau chuốt nội dung này">✨ Viết lại</button>
-            <button type="button" class="sm secondary" id="btnAiGenerate" title="Mở trợ lý Gemini để soạn bài mới">✨ Soạn bằng AI</button>
+            <button type="button" class="sm secondary" id="btnAiGenerate" title="Mở trợ lý AI để soạn bài mới">✨ Soạn bằng AI</button>
           </div>
         </div>
         <textarea id="p-caption" rows="7" placeholder="Nội dung bài đăng…">${esc(post?.caption ?? '')}</textarea>
@@ -236,6 +236,7 @@ async function postModal(post, onDone) {
             if (res.title && !titleInput.value) titleInput.value = res.title;
             if (res.caption) captionInput.value = res.caption;
             if (res.hashtags) hashtagsInput.value = res.hashtags;
+            toast('Đã điền nội dung AI vào form bài viết!', 'ok');
           },
         });
       });
@@ -248,6 +249,7 @@ async function postModal(post, onDone) {
             if (res.title) titleInput.value = res.title;
             if (res.caption) captionInput.value = res.caption;
             if (res.hashtags) hashtagsInput.value = res.hashtags;
+            toast('Đã điền nội dung AI vào form bài viết!', 'ok');
           },
         });
       });
@@ -415,35 +417,102 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
   let currentResult = null;
   let activeVarIndex = 0;
 
-  let aiSettings = await api.ai.getSettings().catch(() => ({ hasKey: false, maskedKey: '', model: 'gemini-2.5-flash' }));
-  const localKey = localStorage.getItem('autotool_gemini_api_key') || '';
-  const hasKey = aiSettings.hasKey || !!localKey;
+  let aiSettings = await api.ai.getSettings().catch(() => ({
+    activeProvider: 'gemini',
+    hasKey: false,
+    maskedKey: '',
+    model: 'gemini-2.5-flash',
+    providers: [
+      { id: 'gemini', name: 'Google Gemini', badge: 'Gemini', defaultModel: 'gemini-2.5-flash', models: [{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }], requiresKey: true },
+      { id: 'openai', name: 'OpenAI (ChatGPT)', badge: 'ChatGPT', defaultModel: 'gpt-4o-mini', models: [{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' }], requiresKey: true },
+      { id: 'deepseek', name: 'DeepSeek', badge: 'DeepSeek', defaultModel: 'deepseek-chat', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }], requiresKey: true },
+      { id: 'claude', name: 'Anthropic Claude', badge: 'Claude', defaultModel: 'claude-3-5-haiku-20241022', models: [{ id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' }], requiresKey: true },
+      { id: 'custom', name: 'Tùy chỉnh (Ollama/Groq)', badge: 'Custom', defaultModel: 'llama3', models: [], requiresKey: false },
+    ],
+  }));
+
+  const providers = aiSettings.providers || [];
+  let currentPid = aiSettings.activeProvider || 'gemini';
+  let activeProvider = providers.find((p) => p.id === currentPid) || providers[0] || { id: 'gemini', name: 'Google Gemini' };
 
   openModal({
-    title: '✨ Trợ lý AI sáng tạo nội dung (Google Gemini)',
+    title: '✨ Trợ lý AI sáng tạo nội dung (Gemini, ChatGPT, DeepSeek...)',
     wide: true,
     body: `
       <div class="ai-key-box" id="aiKeyBox">
-        <div class="row tight" style="align-items:center; justify-content:space-between">
-          <div style="display:flex; align-items:center; gap:8px">
-            <span class="badge gemini">Gemini 2.5 Flash</span>
-            <span class="tiny muted" id="keyStatusText">
-              ${hasKey ? `Đã cấu hình API Key: <code>${esc(aiSettings.maskedKey || (localKey ? localKey.slice(0, 6) + '...' + localKey.slice(-4) : 'Đã lưu'))}</code>` : '⚠️ Chưa có API Key'}
-            </span>
+        <div class="row tight" style="align-items:center; gap:10px; flex-wrap:wrap">
+          <label class="field" style="margin:0; min-width:180px; flex:1">
+            <span style="font-weight:600">Nhà cung cấp AI</span>
+            <select id="aiProviderSelect">
+              ${providers.map((p) => `<option value="${esc(p.id)}" ${p.id === currentPid ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field" style="margin:0; min-width:220px; flex:1">
+            <span style="font-weight:600">Mô hình (Model)</span>
+            <select id="aiModelSelect"></select>
+            <input type="text" id="aiCustomModelInput" style="display:none; margin-top:4px" placeholder="Nhập tên model (vd: llama3, qwen2.5:7b...)" />
+          </label>
+          <div style="margin-top:auto; padding-bottom:2px">
+            <button type="button" class="sm ghost" id="btnToggleKeyInput">⚙️ Cấu hình API Key</button>
           </div>
-          <button type="button" class="sm ghost" id="btnToggleKeyInput">${hasKey ? 'Đổi API Key' : 'Nhập API Key'}</button>
         </div>
-        <div id="keyInputSection" style="${hasKey ? 'display:none;' : ''} margin-top:10px; border-top:1px solid var(--border-soft); padding-top:10px">
+
+        <div class="row tight" style="align-items:center; justify-content:space-between; margin-top:10px">
+          <div style="display:flex; align-items:center; gap:8px">
+            <span class="badge ${esc(activeProvider.id)}" id="providerBadge">${esc(activeProvider.badge || activeProvider.name)}</span>
+            <span class="tiny muted" id="keyStatusText"></span>
+          </div>
+        </div>
+
+        <div id="keyInputSection" style="display:none; margin-top:10px; border-top:1px solid var(--border-soft); padding-top:10px">
+          <div id="customEndpointBox" style="display:none; margin-bottom:8px">
+            <label class="field" style="margin:0">
+              <span>Địa chỉ máy chủ (Base URL / Endpoint)</span>
+              <input type="text" id="aiEndpointInput" placeholder="http://localhost:11434/v1" />
+              <div class="tiny muted mt">Hỗ trợ Ollama cục bộ (http://localhost:11434/v1), Groq, OpenRouter, vLLM...</div>
+            </label>
+          </div>
+
           <label class="field" style="margin-bottom:6px">
-            <span>Google Gemini API Key <b>*</b></span>
+            <span id="apiKeyLabel">API Key</span>
             <div class="row tight" style="align-items:center">
-              <input type="password" id="aiApiKeyInput" value="${esc(localKey)}" placeholder="Dán Gemini API Key (AIzaSy...)" style="flex:1" />
+              <input type="password" id="aiApiKeyInput" placeholder="Dán API Key..." style="flex:1" />
               <button type="button" class="sm" id="btnEyeKey" title="Ẩn/hiện key">👁️</button>
-              <button type="button" class="sm primary" id="btnSaveKey">Lưu Key</button>
+              <button type="button" class="sm primary" id="btnSaveKey">💾 Lưu cấu hình</button>
             </div>
           </label>
-          <div class="tiny muted">
-            Chưa có key? <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Lấy API Key miễn phí tại Google AI Studio ↗</a> (miễn phí, có sẵn quota sử dụng).
+          <div class="tiny muted" id="keyHelpTextContainer"></div>
+        </div>
+      </div>
+
+      <!-- Phong cach ca nhan & Giong dieu rieng -->
+      <div class="ai-key-box" style="margin-top:-4px; margin-bottom:14px">
+        <div class="row tight" style="align-items:center; justify-content:space-between">
+          <div style="display:flex; align-items:center; gap:8px">
+            <span style="font-weight:600; font-size:13px">🎨 Phong cách cá nhân &amp; Giọng điệu riêng</span>
+            <span class="badge" id="personaBadge" style="display:none; font-size:11px; padding:1px 7px; background:rgba(34,197,94,0.15); color:var(--ok); border-color:rgba(34,197,94,0.3)">✓ Đang áp dụng</span>
+          </div>
+          <button type="button" class="sm ghost" id="btnTogglePersona">Ẩn / Hiện thiết lập</button>
+        </div>
+        <div id="personaBox" style="margin-top:10px">
+          <label class="field" style="margin-bottom:6px">
+            <span class="tiny muted" style="margin-bottom:4px">Định hình phong cách để AI viết chuẩn giọng của bạn (xưng hô, emoji, hotline, thông điệp thương hiệu...):</span>
+            <textarea id="aiPersonaPrompt" rows="3" placeholder="Ví dụ: Xưng hô Shop - Bạn, phong cách hóm hỉnh gần gũi, dùng nhiều emoji năng động, cuối bài luôn để hotline: 0988.xxx.xxx, kêu gọi inbox nhận ưu đãi...">${esc(aiSettings.personaPrompt || '')}</textarea>
+          </label>
+          <div class="row tight" style="gap:6px; flex-wrap:wrap; margin-bottom:10px">
+            <span class="tiny muted" style="align-self:center; font-size:11.5px">Gợi ý nhanh:</span>
+            <button type="button" class="ai-chip" data-insert="Xưng hô: Em - Anh/Chị.">+ Em - Anh/Chị</button>
+            <button type="button" class="ai-chip" data-insert="Xưng hô: Shop - Bạn.">+ Shop - Bạn</button>
+            <button type="button" class="ai-chip" data-insert="Phong cách trẻ trung Gen Z, ngôn từ bắt trend, nhiều emoji vui vẻ.">+ Gen Z &amp; Emoji</button>
+            <button type="button" class="ai-chip" data-insert="Phong cách chuyên gia uy tín, chuyên nghiệp, súc tích và mạch lạc.">+ Chuyên gia uy tín</button>
+            <button type="button" class="ai-chip" data-insert="Cuối bài luôn kèm Hotline / Zalo: 09xx.xxx.xxx để tư vấn.">+ Hotline/Zalo</button>
+            <button type="button" class="ai-chip" data-insert="Kêu gọi hành động mạnh mẽ: Inbox ngay để nhận ưu đãi đặc biệt hôm nay!">+ Kêu gọi Inbox</button>
+          </div>
+          <div class="row tight" style="align-items:center; justify-content:space-between">
+            <label class="check" style="font-size:12px; margin:0">
+              <input type="checkbox" id="chkApplyPersona" checked /> Tự động áp dụng phong cách này cho mọi bài viết
+            </label>
+            <button type="button" class="sm primary" id="btnSavePersona">💾 Lưu phong cách</button>
           </div>
         </div>
       </div>
@@ -463,19 +532,14 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
           <label class="field">
             <span>Nền tảng hướng tới</span>
             <select id="ai-gen-platform">
-              <option value="đa nền tảng">Đa nền tảng (Facebook, Zalo, Web)</option>
-              <option value="Facebook">Facebook (Page / Group)</option>
-              <option value="LinkedIn">LinkedIn (Chuyên nghiệp, B2B)</option>
-              <option value="X (Twitter)">X / Twitter (Ngắn gọn, súc tích)</option>
-              <option value="TikTok">TikTok (Mô tả video cuốn hút)</option>
-              <option value="Threads">Threads (Gần gũi, đời thường)</option>
-              <option value="Zalo">Zalo (Thân thiện, trực tiếp)</option>
+              <option value="Facebook" selected>Facebook (Page / Group / Cá nhân)</option>
             </select>
           </label>
           <label class="field">
             <span>Giọng điệu / Phong cách</span>
             <select id="ai-gen-tone">
-              <option value="bán hàng thu hút, kêu gọi hành động mạnh mẽ">Bán hàng &amp; Kêu gọi hành động (CTA)</option>
+              <option value="theo phong cách cá nhân đã lưu" ${aiSettings.personaPrompt ? 'selected' : ''}>🌟 Chuẩn phong cách cá nhân của bạn</option>
+              <option value="bán hàng thu hút, kêu gọi hành động mạnh mẽ" ${!aiSettings.personaPrompt ? 'selected' : ''}>Bán hàng &amp; Kêu gọi hành động (CTA)</option>
               <option value="chuyên nghiệp, uy tín, chuẩn mực">Chuyên nghiệp &amp; Uy tín</option>
               <option value="hài hước, hóm hỉnh, bắt trend">Hài hước, bắt trend (Gen Z)</option>
               <option value="chia sẻ kiến thức, hữu ích, khách quan">Chia sẻ kiến thức &amp; Giá trị</option>
@@ -507,7 +571,8 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
           <label class="field">
             <span>Mục tiêu viết lại</span>
             <select id="ai-rewrite-tone">
-              <option value="trau chuốt câu cú, ngắt dòng dễ đọc và thêm emoji sinh động">Trau chuốt, ngắt dòng &amp; thêm emoji sinh động</option>
+              <option value="viết lại chuẩn theo phong cách cá nhân đã lưu">🌟 Viết lại theo phong cách cá nhân của bạn</option>
+              <option value="trau chuốt câu cú, ngắt dòng dễ đọc và thêm emoji sinh động" selected>Trau chuốt, ngắt dòng &amp; thêm emoji sinh động</option>
               <option value="viết ngắn gọn, súc tích, đi thẳng vào trọng tâm">Viết ngắn gọn, súc tích hơn</option>
               <option value="tăng tính thuyết phục và thêm lời kêu gọi hành động (CTA) chốt đơn">Bổ sung lời kêu gọi hành động (CTA)</option>
               <option value="chuyển sang phong cách bán hàng hấp dẫn">Chuyển sang phong cách bán hàng</option>
@@ -517,13 +582,7 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
           <label class="field">
             <span>Nền tảng</span>
             <select id="ai-rewrite-platform">
-              <option value="đa nền tảng">Đa nền tảng</option>
-              <option value="Facebook">Facebook</option>
-              <option value="LinkedIn">LinkedIn</option>
-              <option value="X (Twitter)">X / Twitter</option>
-              <option value="TikTok">TikTok</option>
-              <option value="Threads">Threads</option>
-              <option value="Zalo">Zalo</option>
+              <option value="Facebook" selected>Facebook</option>
             </select>
           </label>
         </div>
@@ -534,20 +593,20 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
       </div>
 
       <button type="button" class="primary" id="btnAiRun" style="width:100%; margin-top:8px; padding:10px">
-        🚀 Tạo bài viết với Gemini
+        🚀 Tạo bài viết với AI
       </button>
 
       <!-- Loading Indicator -->
       <div id="aiLoadingBox" style="display:none; text-align:center; padding:24px 0">
         <div class="big">✨</div>
-        <div><strong>Gemini AI đang sáng tạo nội dung…</strong></div>
-        <div class="tiny muted" style="margin-top:4px">Thường mất khoảng 2-4 giây</div>
+        <div><strong>AI đang sáng tạo nội dung…</strong></div>
+        <div class="tiny muted" style="margin-top:4px">Thường mất khoảng 2-5 giây</div>
       </div>
 
       <!-- Result Box -->
       <div id="aiResultBox" class="ai-result-box" style="display:none">
         <div class="row tight" style="align-items:center; justify-content:space-between; margin-bottom:10px">
-          <strong>🎉 Kết quả từ Gemini AI</strong>
+          <strong>🎉 Kết quả</strong>
           <div id="varTabsContainer" class="ai-var-tabs" style="margin-bottom:0"></div>
         </div>
 
@@ -575,21 +634,93 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
           </div>
         </label>
 
-        <div class="row" style="margin-top:14px; gap:8px">
+        <div class="row" style="margin-top:14px; gap:8px; flex-wrap:wrap">
           ${onApply ? '<button type="button" class="primary" id="btnApplyPost">📋 Áp dụng vào form bài viết</button>' : ''}
           <button type="button" class="${onApply ? '' : 'primary'}" id="btnSaveDirect">💾 Lưu thành bài viết mới</button>
+          ${!onApply ? '<button type="button" class="secondary" id="btnEditInForm">📝 Mở trong form để chọn ảnh</button>' : ''}
           <button type="button" id="btnSaveAllVars" style="display:none">💾 Lưu tất cả biến thể</button>
         </div>
       </div>
     `,
     footer: `<button data-modal-close>Đóng</button>`,
     onMount(modal) {
+      const selProvider = modal.querySelector('#aiProviderSelect');
+      const selModel = modal.querySelector('#aiModelSelect');
+      const customModelInput = modal.querySelector('#aiCustomModelInput');
+      const customEndpointBox = modal.querySelector('#customEndpointBox');
+      const endpointInput = modal.querySelector('#aiEndpointInput');
       const keyBox = modal.querySelector('#keyInputSection');
       const keyInput = modal.querySelector('#aiApiKeyInput');
       const btnToggleKey = modal.querySelector('#btnToggleKeyInput');
       const btnEye = modal.querySelector('#btnEyeKey');
       const btnSaveKey = modal.querySelector('#btnSaveKey');
+      const providerBadge = modal.querySelector('#providerBadge');
       const keyStatusText = modal.querySelector('#keyStatusText');
+      const apiKeyLabel = modal.querySelector('#apiKeyLabel');
+      const keyHelpBox = modal.querySelector('#keyHelpTextContainer');
+      const btnRun = modal.querySelector('#btnAiRun');
+
+      function updateProviderUI(pid) {
+        activeProvider = (aiSettings.providers || []).find((x) => x.id === pid) || aiSettings.providers?.[0];
+        if (!activeProvider) return;
+
+        providerBadge.className = `badge ${activeProvider.id}`;
+        providerBadge.textContent = activeProvider.badge || activeProvider.name;
+
+        // Models
+        const models = activeProvider.models || [];
+        let opts = models.map((m) => `<option value="${esc(m.id)}" ${m.id === activeProvider.model ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+        if (activeProvider.id === 'custom') {
+          opts += `<option value="custom_other" ${!models.some((m) => m.id === activeProvider.model) ? 'selected' : ''}>-- Nhập model khác --</option>`;
+        }
+        selModel.innerHTML = opts;
+
+        if (activeProvider.id === 'custom') {
+          customEndpointBox.style.display = 'block';
+          endpointInput.value = activeProvider.endpoint || activeProvider.defaultEndpoint || 'http://localhost:11434/v1';
+          const isOther = selModel.value === 'custom_other';
+          customModelInput.style.display = isOther ? 'block' : 'none';
+          if (isOther) customModelInput.value = activeProvider.model || '';
+        } else {
+          customEndpointBox.style.display = 'none';
+          customModelInput.style.display = 'none';
+        }
+
+        // Key status
+        const hasKey = activeProvider.hasKey || !activeProvider.requiresKey;
+        if (activeProvider.requiresKey) {
+          apiKeyLabel.textContent = `${activeProvider.name} API Key *`;
+          keyInput.placeholder = activeProvider.keyPlaceholder || 'Dán API Key...';
+          keyStatusText.innerHTML = activeProvider.hasKey
+            ? `Đã cấu hình Key: <code>${esc(activeProvider.maskedKey)}</code>`
+            : '<span style="color:var(--warn)">⚠️ Chưa có API Key</span>';
+        } else {
+          apiKeyLabel.textContent = `${activeProvider.name} API Key (Tùy chọn)`;
+          keyInput.placeholder = activeProvider.keyPlaceholder || 'Bỏ trống nếu dùng máy cá nhân';
+          keyStatusText.innerHTML = activeProvider.hasKey
+            ? `Đã có Key: <code>${esc(activeProvider.maskedKey)}</code>`
+            : '<span style="color:var(--ok)">✓ Sẵn sàng (không bắt buộc key)</span>';
+        }
+
+        if (activeProvider.keyHelpUrl) {
+          keyHelpBox.innerHTML = `Chưa có key? <a href="${esc(activeProvider.keyHelpUrl)}" target="_blank" rel="noopener">${esc(activeProvider.keyHelpText || 'Lấy API Key ↗')}</a>`;
+        } else {
+          keyHelpBox.innerHTML = esc(activeProvider.keyHelpText || '');
+        }
+
+        btnRun.textContent = `🚀 Tạo bài viết với ${activeProvider.name}`;
+      }
+
+      selProvider.addEventListener('change', () => {
+        updateProviderUI(selProvider.value);
+      });
+
+      selModel.addEventListener('change', () => {
+        if (activeProvider.id === 'custom') {
+          const isOther = selModel.value === 'custom_other';
+          customModelInput.style.display = isOther ? 'block' : 'none';
+        }
+      });
 
       btnToggleKey.addEventListener('click', () => {
         keyBox.style.display = keyBox.style.display === 'none' ? 'block' : 'none';
@@ -601,18 +732,81 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
 
       btnSaveKey.addEventListener('click', async () => {
         const val = keyInput.value.trim();
-        if (!val) return toast('Vui lòng nhập API Key', 'warn');
+        const selectedModel = (activeProvider.id === 'custom' && selModel.value === 'custom_other')
+          ? customModelInput.value.trim()
+          : selModel.value;
+        const selectedEp = activeProvider.id === 'custom' ? endpointInput.value.trim() : undefined;
+
         try {
-          const r = await api.ai.saveSettings({ apiKey: val });
-          localStorage.setItem('autotool_gemini_api_key', val);
-          toast('Đã lưu Gemini API Key thành công!', 'ok');
-          keyStatusText.innerHTML = `Đã cấu hình API Key: <code>${esc(r.maskedKey || (val.slice(0, 6) + '...' + val.slice(-4)))}</code>`;
-          btnToggleKey.textContent = 'Đổi API Key';
+          const r = await api.ai.saveSettings({
+            provider: activeProvider.id,
+            apiKey: val || undefined,
+            model: selectedModel || undefined,
+            endpoint: selectedEp,
+            setActive: true,
+          });
+          aiSettings = r;
+          toast(`Đã lưu cấu hình ${activeProvider.name}!`, 'ok');
+          updateProviderUI(activeProvider.id);
+          keyInput.value = '';
           keyBox.style.display = 'none';
         } catch (err) {
           toast(err.message, 'err');
         }
       });
+
+      // Persona style controls
+      const btnTogglePersona = modal.querySelector('#btnTogglePersona');
+      const personaBox = modal.querySelector('#personaBox');
+      const personaInput = modal.querySelector('#aiPersonaPrompt');
+      const personaBadge = modal.querySelector('#personaBadge');
+      const chkApplyPersona = modal.querySelector('#chkApplyPersona');
+      const btnSavePersona = modal.querySelector('#btnSavePersona');
+
+      function updatePersonaBadge() {
+        const val = personaInput ? personaInput.value.trim() : '';
+        if (personaBadge) {
+          personaBadge.style.display = val ? 'inline-block' : 'none';
+        }
+      }
+      updatePersonaBadge();
+
+      btnTogglePersona?.addEventListener('click', () => {
+        personaBox.style.display = personaBox.style.display === 'none' ? 'block' : 'none';
+      });
+
+      modal.querySelectorAll('.ai-chip[data-insert]').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const text = chip.dataset.insert;
+          const cur = personaInput.value.trim();
+          if (!cur) {
+            personaInput.value = text;
+          } else {
+            personaInput.value = `${cur}\n- ${text}`;
+          }
+          personaInput.focus();
+          updatePersonaBadge();
+        });
+      });
+
+      personaInput?.addEventListener('input', updatePersonaBadge);
+
+      btnSavePersona?.addEventListener('click', async () => {
+        const text = personaInput ? personaInput.value.trim() : '';
+        try {
+          await api.ai.saveSettings({
+            personaPrompt: text,
+          });
+          aiSettings.personaPrompt = text;
+          updatePersonaBadge();
+          toast('Đã lưu phong cách cá nhân thành công!', 'ok');
+        } catch (err) {
+          toast(err.message, 'err');
+        }
+      });
+
+      // Initialize UI
+      updateProviderUI(currentPid);
 
       // Tabs switcher
       const tabBtns = modal.querySelectorAll('.ai-tab');
@@ -630,7 +824,6 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
       });
 
       // Generate action
-      const btnRun = modal.querySelector('#btnAiRun');
       const loadingBox = modal.querySelector('#aiLoadingBox');
       const resultBox = modal.querySelector('#aiResultBox');
       const resTitle = modal.querySelector('#resTitle');
@@ -665,10 +858,23 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
 
       btnRun.addEventListener('click', async () => {
         const customKey = keyInput.value.trim();
+        const selectedModel = (activeProvider.id === 'custom' && selModel.value === 'custom_other')
+          ? customModelInput.value.trim()
+          : selModel.value;
+        const selectedEp = activeProvider.id === 'custom' ? endpointInput.value.trim() : undefined;
+
+        const personaText = personaInput ? personaInput.value.trim() : '';
+        const shouldApplyPersona = chkApplyPersona ? chkApplyPersona.checked : true;
+
         const payload = {
-          apiKey: customKey,
-          saveKey: true,
+          provider: activeProvider.id,
+          model: selectedModel,
+          endpoint: selectedEp,
+          apiKey: customKey || undefined,
+          saveKey: !!customKey,
           mode: activeMode,
+          personaPrompt: shouldApplyPersona && personaText ? personaText : undefined,
+          savePersona: shouldApplyPersona && !!personaText,
         };
 
         if (activeMode === 'generate') {
@@ -693,9 +899,6 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
         try {
           const res = await api.ai.generate(payload);
           currentResult = res.result;
-          if (customKey) {
-            localStorage.setItem('autotool_gemini_api_key', customKey);
-          }
 
           loadingBox.style.display = 'none';
           resultBox.style.display = 'block';
@@ -716,7 +919,7 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
           }
 
           showVariant(0);
-          toast('Gemini đã tạo nội dung thành công!', 'ok');
+          toast(`${activeProvider.name} đã tạo nội dung thành công!`, 'ok');
         } catch (err) {
           loadingBox.style.display = 'none';
           toast(err.message, 'err');
@@ -742,8 +945,25 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
             caption: resCaption.value.trim(),
             hashtags: resHashtags.value.trim(),
           });
-          closeModal();
+          closeModal(modal);
         }
+      });
+
+      // Open in post form (when opened standalone without prior form)
+      modal.querySelector('#btnEditInForm')?.addEventListener('click', () => {
+        const titleVal = resTitle.value.trim();
+        const captionVal = resCaption.value.trim();
+        const hashtagsVal = resHashtags.value.trim();
+        closeModal(modal);
+        postModal(
+          {
+            title: titleVal,
+            caption: captionVal,
+            hashtags: hashtagsVal,
+            media: [],
+          },
+          onDone,
+        );
       });
 
       // Save directly as new post
@@ -757,7 +977,7 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
         try {
           await api.posts.create(postData);
           toast('Đã lưu bài viết mới vào danh sách!', 'ok');
-          closeModal();
+          closeModal(modal);
           onDone?.();
         } catch (err) {
           toast(err.message, 'err');
@@ -782,7 +1002,7 @@ async function aiAssistantModal({ mode = 'generate', initialCaption = '', onAppl
           }
         }
         toast(`Đã lưu ${countOk} bài viết vào danh sách!`, 'ok');
-        closeModal();
+        closeModal(modal);
         onDone?.();
       });
     },

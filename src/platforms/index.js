@@ -9,6 +9,7 @@ import tiktok from './tiktok.js';
 import zalo from './zalo.js';
 
 const list = [facebook, linkedin, x, telegram, reddit, instagram, threads, tiktok, zalo];
+const ACTIVE_PLATFORMS = new Set(['facebook']);
 
 export const platforms = new Map(list.map((p) => [p.id, p]));
 
@@ -22,7 +23,10 @@ export function hasPlatform(id) {
   return platforms.has(String(id ?? '').toLowerCase());
 }
 
-export function allPlatforms() {
+export function allPlatforms(activeOnly = false) {
+  if (activeOnly) {
+    return list.filter((p) => ACTIVE_PLATFORMS.has(p.id));
+  }
   return [...platforms.values()];
 }
 
@@ -48,8 +52,8 @@ export function platformView(p) {
   };
 }
 
-export function listPlatforms() {
-  return allPlatforms().map(platformView);
+export function listPlatforms(activeOnly = true) {
+  return allPlatforms(activeOnly).map(platformView);
 }
 
 const KIND_LABELS = {
